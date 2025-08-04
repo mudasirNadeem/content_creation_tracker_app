@@ -2,9 +2,32 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { X, Save, Upload, MessageCircle, Activity, FileIcon, ExternalLink } from "lucide-react";
+import { X, Save, Upload, MessageCircle, Activity, FileIcon, ExternalLink, Image, FileText, File } from "lucide-react";
 
-function AttachmentItem({ storageId }: { storageId: Id<"_storage"> }) {
+interface AttachmentItemProps {
+  storageId: Id<"_storage">;
+  filename?: string;
+}
+
+function getFileIcon(filename: string = "") {
+  const ext = filename.toLowerCase().split('.').pop();
+  switch (ext) {
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+      return <Image className="w-5 h-5 text-blue-500" />;
+    case 'pdf':
+    case 'doc':
+    case 'docx':
+    case 'txt':
+      return <FileText className="w-5 h-5 text-red-500" />;
+    default:
+      return <File className="w-5 h-5 text-gray-500" />;
+  }
+}
+
+function AttachmentItem({ storageId, filename }: AttachmentItemProps) {
   const [url, setUrl] = useState<string | null>(null);
   const getFileUrl = useMutation(api.ideas.getFileUrl);
 
@@ -21,17 +44,22 @@ function AttachmentItem({ storageId }: { storageId: Id<"_storage"> }) {
   }, [storageId, getFileUrl]);
 
   return (
-    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
-      <div className="flex items-center gap-2">
-        <FileIcon className="w-4 h-4 text-gray-500" />
-        <span className="text-sm text-gray-700">File {storageId.slice(-6)}</span>
+    <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-shadow">
+      <div className="flex items-center gap-3">
+        {getFileIcon(filename)}
+        <div>
+          <span className="text-sm font-medium text-gray-700">
+            {filename || `File ${storageId.slice(-6)}`}
+          </span>
+          <p className="text-xs text-gray-500">Added {new Date().toLocaleDateString()}</p>
+        </div>
       </div>
       {url && (
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+          className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md text-sm font-medium transition-colors"
         >
           View <ExternalLink className="w-3 h-3" />
         </a>
@@ -63,6 +91,8 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
   const [dueDate, setDueDate] = useState("");
   const [activeTab, setActiveTab] = useState<"details" | "activity" | "comments">("details");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadingFileName, setUploadingFileName] = useState("");
 
   useEffect(() => {
     if (idea) {
@@ -142,23 +172,47 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
     }
 
     setIsUploading(true);
+    setUploadingFileName(file.name);
+    setUploadProgress(0);
+
     try {
       console.log("Generating upload URL for file:", file.name);
       const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
       
-      if (result.ok) {
-        const { storageId } = await result.json();
-        await addAttachment({ ideaId, storageId });
-      }
+      // Create XMLHttpRequest to track upload progress
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', uploadUrl);
+      xhr.setRequestHeader('Content-Type', file.type);
+      
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(progress);
+        }
+      };
+
+      // Create a Promise to handle the XHR request
+      const uploadPromise = new Promise((resolve, reject) => {
+        xhr.onload = () => {
+          if (xhr.status === 200) {
+            resolve(JSON.parse(xhr.response));
+          } else {
+            reject(new Error('Upload failed'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Upload failed'));
+      });
+
+      xhr.send(file);
+      const { storageId } = await uploadPromise as { storageId: Id<"_storage"> };
+      await addAttachment({ ideaId, storageId });
+      
     } catch (error) {
       console.error("Failed to upload file:", error);
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
+      setUploadingFileName("");
     }
   };
 
@@ -220,7 +274,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
 
         <div className="p-6 overflow-y-auto max-h-[60vh]">
           {activeTab === "details" && (
-            <form onSubmit={(e) => { e.preventDefault(); handleSave(); }} className="space-y-6">
+            <form onSubmit={async (e) => { e.preventDefault(); await handleSave(); }} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Title
@@ -322,7 +376,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                     Attachments
                   </label>
                   <div className="space-y-4">
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4 relative">
                       <input
                         type="file"
                         onChange={(e) => void handleFileUpload(e)}
@@ -333,20 +387,39 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                       />
                       <label
                         htmlFor="file-upload"
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors"
                       >
                         <Upload className="w-4 h-4" />
                         {isUploading ? "Uploading..." : "Upload File"}
                       </label>
+
+                      {/* Upload Progress */}
+                      {isUploading && (
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-gray-600 truncate max-w-[200px]">{uploadingFileName}</span>
+                            <span className="text-blue-600 font-medium">{uploadProgress}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className="bg-blue-600 h-full transition-all duration-300 ease-out"
+                              style={{ width: `${uploadProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
-                    
-                    {/* Display attachments */}
+
+                    {/* File List */}
                     {idea?.attachments && idea.attachments.length > 0 && (
-                      <div className="mt-4">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Files</h4>
-                        <div className="space-y-2">
+                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <h4 className="text-sm font-medium text-gray-900 mb-3">Uploaded Files</h4>
+                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
                           {idea.attachments.map((attachmentId) => (
-                            <AttachmentItem key={attachmentId.toString()} storageId={attachmentId} />
+                            <AttachmentItem 
+                              key={attachmentId.toString()} 
+                              storageId={attachmentId} 
+                            />
                           ))}
                         </div>
                       </div>
