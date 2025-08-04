@@ -63,17 +63,6 @@ export function KanbanColumn({
             />
           ))}
       </div>
-      
-      <div className="space-y-3">
-        {ideas.map((idea) => (
-          <IdeaCard
-            key={idea._id}
-            idea={idea}
-            onDragStart={onDragStart}
-            onClick={() => onIdeaClick(idea._id)}
-          />
-        ))}
-      </div>
     </div>
   );
 }
