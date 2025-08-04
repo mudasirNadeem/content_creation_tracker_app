@@ -7,6 +7,7 @@ import { X, Save, Upload, MessageCircle, Activity, FileIcon, ExternalLink, Image
 interface AttachmentItemProps {
   storageId: Id<"_storage">;
   filename?: string;
+  onRemove?: () => void;
 }
 
 function getFileIcon(filename: string = "") {
@@ -27,7 +28,7 @@ function getFileIcon(filename: string = "") {
   }
 }
 
-function AttachmentItem({ storageId, filename }: AttachmentItemProps) {
+function AttachmentItem({ storageId, filename, onRemove }: AttachmentItemProps) {
   const [url, setUrl] = useState<string | null>(null);
   const getFileUrl = useMutation(api.ideas.getFileUrl);
 
@@ -54,19 +55,31 @@ function AttachmentItem({ storageId, filename }: AttachmentItemProps) {
           <p className="text-xs text-gray-500">Added {new Date().toLocaleDateString()}</p>
         </div>
       </div>
-      {url && (
-        <a
-          href={url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md text-sm font-medium transition-colors"
-        >
-          View <ExternalLink className="w-3 h-3" />
-        </a>
-      )}
+      <div className="flex items-center gap-2">
+        {url && (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-md text-sm font-medium transition-colors"
+          >
+            View <ExternalLink className="w-3 h-3" />
+          </a>
+        )}
+        {onRemove && (
+          <button
+            onClick={onRemove}
+            className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+            title="Remove attachment"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
     </div>
   );
 }
+
 import { MarkdownEditor } from "./MarkdownEditor";
 import { ActivityFeed } from "./ActivityFeed";
 import { CommentSection } from "./CommentSection";
@@ -82,6 +95,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
   const updateIdea = useMutation(api.ideas.update);
   const generateUploadUrl = useMutation(api.ideas.generateUploadUrl);
   const addAttachment = useMutation(api.ideas.addAttachment);
+  const removeAttachment = useMutation(api.ideas.removeAttachment);
   
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -93,6 +107,10 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadingFileName, setUploadingFileName] = useState("");
+  
+  // For new ideas, we'll create a temporary idea first, then update it
+  const [currentIdeaId, setCurrentIdeaId] = useState<Id<"ideas"> | undefined>(ideaId);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   useEffect(() => {
     if (idea) {
@@ -101,6 +119,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
       setPriority(idea.priority || "medium");
       setTags(idea.tags || []);
       setDueDate(idea.dueDate ? new Date(idea.dueDate).toISOString().split('T')[0] : "");
+      setHasUnsavedChanges(false);
     } else {
       // Reset form for new idea
       setTitle("");
@@ -108,11 +127,36 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
       setPriority("medium");
       setTags([]);
       setDueDate("");
+      setHasUnsavedChanges(false);
     }
+    setCurrentIdeaId(ideaId);
   }, [idea, ideaId]);
 
+  // Create temporary idea for file uploads if it doesn't exist
+  const ensureIdeaExists = async () => {
+    if (currentIdeaId) return currentIdeaId;
+
+    try {
+      const tempTitle = title.trim() || "Untitled Idea";
+      const newIdeaId = await createIdea({
+        title: tempTitle,
+        description: description,
+        priority,
+        tags,
+        dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
+      });
+      
+      setCurrentIdeaId(newIdeaId);
+      setHasUnsavedChanges(false);
+      return newIdeaId;
+    } catch (error) {
+      console.error("Failed to create temporary idea:", error);
+      throw error;
+    }
+  };
+
   const handleSave = async () => {
-    console.log("Saving idea:", { title, description, priority, tags, dueDate, ideaId });
+    console.log("Saving idea:", { title, description, priority, tags, dueDate, currentIdeaId });
     
     if (!title.trim()) {
       console.log("Title is empty, cannot save");
@@ -120,10 +164,10 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
     }
     
     try {
-      if (ideaId && idea) {
+      if (currentIdeaId) {
         console.log("Updating existing idea");
         await updateIdea({
-          ideaId,
+          ideaId: currentIdeaId,
           title,
           description,
           priority,
@@ -132,42 +176,67 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
         });
       } else {
         console.log("Creating new idea");
-        await createIdea({
+        const newIdeaId = await createIdea({
           title,
           description,
           priority,
           tags,
           dueDate: dueDate ? new Date(dueDate).getTime() : undefined,
         });
+        setCurrentIdeaId(newIdeaId);
       }
+      setHasUnsavedChanges(false);
       onClose();
     } catch (error) {
       console.error("Failed to save idea:", error);
     }
   };
 
+  const handleInputChange = (field: string, value: any) => {
+    setHasUnsavedChanges(true);
+    switch (field) {
+      case 'title':
+        setTitle(value);
+        break;
+      case 'description':
+        setDescription(value);
+        break;
+      case 'priority':
+        setPriority(value);
+        break;
+      case 'tags':
+        setTags(value);
+        break;
+      case 'dueDate':
+        setDueDate(value);
+        break;
+    }
+  };
+
   const handleAddTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
+      const newTags = [...tags, tagInput.trim()];
+      handleInputChange('tags', newTags);
       setTagInput("");
     }
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
+    const newTags = tags.filter(tag => tag !== tagToRemove);
+    handleInputChange('tags', newTags);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !ideaId) {
-      console.error("No file selected or no idea ID");
+    if (!file) {
+      console.error("No file selected");
       return;
     }
 
     // Add file size limit (10MB)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    const MAX_FILE_SIZE = 100 * 1024 * 1024; // 10MB in bytes
     if (file.size > MAX_FILE_SIZE) {
-      alert("File size exceeds 10MB limit");
+      alert("File size exceeds 100MB limit");
       return;
     }
 
@@ -176,10 +245,12 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
     setUploadProgress(0);
 
     try {
+      // Ensure idea exists before uploading
+      const targetIdeaId = await ensureIdeaExists();
+      
       console.log("Generating upload URL for file:", file.name);
       const uploadUrl = await generateUploadUrl();
       
-      // Create XMLHttpRequest to track upload progress
       const xhr = new XMLHttpRequest();
       xhr.open('POST', uploadUrl);
       xhr.setRequestHeader('Content-Type', file.type);
@@ -191,7 +262,6 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
         }
       };
 
-      // Create a Promise to handle the XHR request
       const uploadPromise = new Promise((resolve, reject) => {
         xhr.onload = () => {
           if (xhr.status === 200) {
@@ -205,16 +275,35 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
 
       xhr.send(file);
       const { storageId } = await uploadPromise as { storageId: Id<"_storage"> };
-      await addAttachment({ ideaId, storageId });
+      await addAttachment({ ideaId: targetIdeaId, storageId });
       
     } catch (error) {
       console.error("Failed to upload file:", error);
+      alert("Failed to upload file. Please try again.");
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
       setUploadingFileName("");
     }
+
+    // Clear the input
+    event.target.value = '';
   };
+
+  const handleRemoveAttachment = async (storageId: Id<"_storage">) => {
+    if (!currentIdeaId) return;
+    
+    try {
+      await removeAttachment({ ideaId: currentIdeaId, storageId });
+    } catch (error) {
+      console.error("Failed to remove attachment:", error);
+      alert("Failed to remove attachment. Please try again.");
+    }
+  };
+
+  // Get current attachments
+  const currentIdea = useQuery(api.ideas.list)?.find(i => i._id === currentIdeaId);
+  const attachments = currentIdea?.attachments || [];
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -222,6 +311,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
         <div className="flex items-center justify-between p-6 border-b">
           <h2 className="text-xl font-semibold">
             {ideaId ? "Edit Idea" : "Create New Idea"}
+            {hasUnsavedChanges && <span className="text-orange-500 ml-2">*</span>}
           </h2>
           <button
             onClick={onClose}
@@ -244,7 +334,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
           >
             Details
           </button>
-          {ideaId && (
+          {currentIdeaId && (
             <>
               <button
                 onClick={() => setActiveTab("activity")}
@@ -282,7 +372,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                 <input
                   type="text"
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => handleInputChange('title', e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter idea title..."
                 />
@@ -294,7 +384,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                 </label>
                 <MarkdownEditor
                   value={description}
-                  onChange={setDescription}
+                  onChange={(value) => handleInputChange('description', value)}
                   placeholder="Describe your content idea..."
                 />
               </div>
@@ -306,7 +396,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                   </label>
                   <select
                     value={priority}
-                    onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
+                    onChange={(e) => handleInputChange('priority', e.target.value as "low" | "medium" | "high")}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     title="Priority"
                     aria-label="Select priority level"
@@ -324,7 +414,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                   <input
                     type="date"
                     value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
+                    onChange={(e) => handleInputChange('dueDate', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -339,13 +429,14 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                     type="text"
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
-                    onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
+                    onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddTag())}
                     title="Enter tag"
                     aria-label="Enter tag"
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Add a tag..."
                   />
                   <button
+                    type="button"
                     onClick={handleAddTag}
                     className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
@@ -360,6 +451,7 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                     >
                       {tag}
                       <button
+                        type="button"
                         onClick={() => handleRemoveTag(tag)}
                         className="text-blue-600 hover:text-blue-800"
                       >
@@ -370,63 +462,75 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                 </div>
               </div>
 
-              {ideaId && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Attachments
-                  </label>
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4 relative">
-                      <input
-                        type="file"
-                        onChange={(e) => void handleFileUpload(e)}
-                        className="hidden"
-                        id="file-upload"
-                        title="Upload file"
-                        aria-label="Upload file"
-                      />
-                      <label
-                        htmlFor="file-upload"
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors"
-                      >
-                        <Upload className="w-4 h-4" />
-                        {isUploading ? "Uploading..." : "Upload File"}
-                      </label>
+              {/* Attachments section - available for both new and existing ideas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Attachments
+                </label>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 relative">
+                    <input
+                      type="file"
+                      onChange={(e) => void handleFileUpload(e)}
+                      className="hidden"
+                      id="file-upload"
+                      title="Upload file"
+                      aria-label="Upload file"
+                      disabled={isUploading}
+                    />
+                    <label
+                      htmlFor="file-upload"
+                      className={`flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg hover:bg-blue-100 cursor-pointer transition-colors ${
+                        isUploading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {isUploading ? "Uploading..." : "Upload File"}
+                    </label>
 
-                      {/* Upload Progress */}
-                      {isUploading && (
-                        <div className="flex-1 space-y-2">
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-gray-600 truncate max-w-[200px]">{uploadingFileName}</span>
-                            <span className="text-blue-600 font-medium">{uploadProgress}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                            <div 
-                              className="bg-blue-600 h-full transition-all duration-300 ease-out"
-                              style={{ width: `${uploadProgress}%` }}
-                            />
-                          </div>
+                    {/* Upload Progress */}
+                    {isUploading && (
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-gray-600 truncate max-w-[200px]">{uploadingFileName}</span>
+                          <span className="text-blue-600 font-medium">{uploadProgress}%</span>
                         </div>
-                      )}
-                    </div>
-
-                    {/* File List */}
-                    {idea?.attachments && idea.attachments.length > 0 && (
-                      <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                        <h4 className="text-sm font-medium text-gray-900 mb-3">Uploaded Files</h4>
-                        <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-                          {idea.attachments.map((attachmentId) => (
-                            <AttachmentItem 
-                              key={attachmentId.toString()} 
-                              storageId={attachmentId} 
-                            />
-                          ))}
+                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className="bg-blue-600 h-full transition-all duration-300 ease-out"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
                         </div>
                       </div>
                     )}
                   </div>
+
+                  {/* Show info for new ideas */}
+                  {!ideaId && (
+                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <p className="text-sm text-blue-700">
+                        💡 <strong>Tip:</strong> You can upload files immediately! The idea will be created automatically when you add your first file.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Uploaded files */}
+                  {attachments.length > 0 && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <h4 className="text-sm font-medium text-gray-900 mb-3">Uploaded Files</h4>
+                      <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                        {attachments.map((attachmentId) => (
+                          <AttachmentItem 
+                            key={attachmentId.toString()} 
+                            storageId={attachmentId}
+                            onRemove={() => handleRemoveAttachment(attachmentId)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
+              </div>
 
               <div className="flex justify-end gap-3 pt-6 border-t mt-6">
                 <button
@@ -442,18 +546,18 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                   className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
                 >
                   <Save className="w-4 h-4" />
-                  {ideaId ? "Update Idea" : "Create Idea"}
+                  {currentIdeaId ? "Update Idea" : "Create Idea"}
                 </button>
               </div>
             </form>
           )}
 
-          {activeTab === "activity" && ideaId && (
-            <ActivityFeed ideaId={ideaId} />
+          {activeTab === "activity" && currentIdeaId && (
+            <ActivityFeed ideaId={currentIdeaId} />
           )}
 
-          {activeTab === "comments" && ideaId && (
-            <CommentSection ideaId={ideaId} />
+          {activeTab === "comments" && currentIdeaId && (
+            <CommentSection ideaId={currentIdeaId} />
           )}
         </div>
       </div>
