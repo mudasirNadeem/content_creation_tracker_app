@@ -14,7 +14,7 @@ export default function App() {
           <SignOutButton />
         </Authenticated>
       </header>
-      <main className="flex-1 p-4">
+      <main className="flex-1 p-4 pb-0">
         <Content />
       </main>
       <Toaster />

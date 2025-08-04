@@ -38,7 +38,7 @@ export function KanbanColumn({
 }: KanbanColumnProps) {
   return (
     <div
-      className={`${color} rounded-lg p-4 min-h-96`}
+      className={`${color} rounded-lg p-4 h-[calc(100vh-240px)] overflow-auto`}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
