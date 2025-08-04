@@ -2,7 +2,43 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { X, Save, Upload, MessageCircle, Activity } from "lucide-react";
+import { X, Save, Upload, MessageCircle, Activity, FileIcon, ExternalLink } from "lucide-react";
+
+function AttachmentItem({ storageId }: { storageId: Id<"_storage"> }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const getFileUrl = useMutation(api.ideas.getFileUrl);
+
+  useEffect(() => {
+    async function fetchUrl() {
+      try {
+        const fileUrl = await getFileUrl({ storageId });
+        setUrl(fileUrl);
+      } catch (error) {
+        console.error("Failed to get file URL:", error);
+      }
+    }
+    fetchUrl();
+  }, [storageId, getFileUrl]);
+
+  return (
+    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+      <div className="flex items-center gap-2">
+        <FileIcon className="w-4 h-4 text-gray-500" />
+        <span className="text-sm text-gray-700">File {storageId.slice(-6)}</span>
+      </div>
+      {url && (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
+        >
+          View <ExternalLink className="w-3 h-3" />
+        </a>
+      )}
+    </div>
+  );
+}
 import { MarkdownEditor } from "./MarkdownEditor";
 import { ActivityFeed } from "./ActivityFeed";
 import { CommentSection } from "./CommentSection";
@@ -93,10 +129,21 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !ideaId) return;
+    if (!file || !ideaId) {
+      console.error("No file selected or no idea ID");
+      return;
+    }
+
+    // Add file size limit (10MB)
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      alert("File size exceeds 10MB limit");
+      return;
+    }
 
     setIsUploading(true);
     try {
+      console.log("Generating upload URL for file:", file.name);
       const uploadUrl = await generateUploadUrl();
       const result = await fetch(uploadUrl, {
         method: "POST",
@@ -125,6 +172,8 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            title="Close modal"
+            aria-label="Close modal"
           >
             <X className="w-5 h-5" />
           </button>
@@ -205,6 +254,8 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as "low" | "medium" | "high")}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    title="Priority"
+                    aria-label="Select priority level"
                   >
                     <option value="low">Low</option>
                     <option value="medium">Medium</option>
@@ -235,6 +286,8 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                     value={tagInput}
                     onChange={(e) => setTagInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleAddTag()}
+                    title="Enter tag"
+                    aria-label="Enter tag"
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="Add a tag..."
                   />
@@ -268,20 +321,36 @@ export function IdeaModal({ ideaId, onClose }: IdeaModalProps) {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Attachments
                   </label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="file"
-                      onChange={handleFileUpload}
-                      className="hidden"
-                      id="file-upload"
-                    />
-                    <label
-                      htmlFor="file-upload"
-                      className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
-                    >
-                      <Upload className="w-4 h-4" />
-                      {isUploading ? "Uploading..." : "Upload File"}
-                    </label>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="file"
+                        onChange={(e) => void handleFileUpload(e)}
+                        className="hidden"
+                        id="file-upload"
+                        title="Upload file"
+                        aria-label="Upload file"
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 cursor-pointer"
+                      >
+                        <Upload className="w-4 h-4" />
+                        {isUploading ? "Uploading..." : "Upload File"}
+                      </label>
+                    </div>
+                    
+                    {/* Display attachments */}
+                    {idea?.attachments && idea.attachments.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Uploaded Files</h4>
+                        <div className="space-y-2">
+                          {idea.attachments.map((attachmentId) => (
+                            <AttachmentItem key={attachmentId.toString()} storageId={attachmentId} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

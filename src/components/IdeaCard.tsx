@@ -36,10 +36,10 @@ export function IdeaCard({ idea, onDragStart, onClick }: IdeaCardProps) {
 
   return (
     <div
-      draggable
+      draggable="true"
       onDragStart={(e) => onDragStart(e, idea._id)}
       onClick={onClick}
-      className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition-shadow"
+      className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 cursor-move hover:shadow-md transition-shadow"
     >
       <div className="flex items-start justify-between mb-2">
         <h4 className="font-medium text-gray-900 text-sm line-clamp-2">
