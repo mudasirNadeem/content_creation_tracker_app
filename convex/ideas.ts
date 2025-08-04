@@ -15,7 +15,21 @@ export const list = query({
   handler: async (ctx) => {
     await requireAuth(ctx);
     
-    const ideas = await ctx.db.query("ideas").collect();
+    // Query ideas for each status to maintain proper order
+    const statuses = ["idea", "todo", "in_progress", "done"] as const;
+    const allIdeas = [];
+    
+    for (const status of statuses) {
+      const ideasForStatus = await ctx.db
+        .query("ideas")
+        .withIndex("by_status_and_updated", (q) => 
+          q.eq("status", status)
+        )
+        .order("desc")
+        .collect();
+      
+      allIdeas.push(...ideasForStatus);
+    }
     
     // Get user info for each idea
     const ideasWithUsers = await Promise.all(
@@ -54,6 +68,8 @@ export const create = mutation({
       priority: args.priority,
       tags: args.tags,
       dueDate: args.dueDate,
+      lastUpdated: Date.now(),
+      attachments: [],
     });
     
     // Log activity
@@ -86,6 +102,7 @@ export const updateStatus = mutation({
     
     await ctx.db.patch(args.ideaId, {
       status: args.status,
+      lastUpdated: Date.now(),
     });
     
     // Log activity
@@ -141,6 +158,11 @@ export const update = mutation({
     if (args.dueDate !== undefined) {
       updates.dueDate = args.dueDate;
       changes.dueDate = { from: idea.dueDate, to: args.dueDate };
+    }
+    
+    // Always update the lastUpdated timestamp when any change occurs
+    if (Object.keys(updates).length > 0) {
+      updates.lastUpdated = Date.now();
     }
     if (args.assignedTo !== undefined) {
       updates.assignedTo = args.assignedTo;

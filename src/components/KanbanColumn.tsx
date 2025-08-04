@@ -15,6 +15,7 @@ interface Idea {
   creator: { name?: string; email?: string } | null;
   assignee: { name?: string; email?: string } | null;
   _creationTime: number;
+  lastUpdated: number;
 }
 
 interface KanbanColumnProps {
@@ -47,6 +48,20 @@ export function KanbanColumn({
         <span className="bg-white px-2 py-1 rounded-full text-sm font-medium text-gray-600">
           {ideas.length}
         </span>
+      </div>
+      
+      {/* Sort ideas by lastUpdated before rendering */}
+      <div className="space-y-3">
+        {[...ideas]
+          .sort((a, b) => (b.lastUpdated || b._creationTime) - (a.lastUpdated || a._creationTime))
+          .map((idea) => (
+            <IdeaCard
+              key={idea._id}
+              idea={idea}
+              onDragStart={onDragStart}
+              onClick={() => onIdeaClick(idea._id)}
+            />
+          ))}
       </div>
       
       <div className="space-y-3">

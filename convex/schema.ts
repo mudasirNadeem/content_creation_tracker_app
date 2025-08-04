@@ -13,10 +13,12 @@ const applicationTables = {
     tags: v.optional(v.array(v.string())),
     dueDate: v.optional(v.number()),
     attachments: v.optional(v.array(v.id("_storage"))),
+    lastUpdated: v.number(),
   })
-    .index("by_status", ["status"])
+    .index("by_status_and_updated", ["status", "lastUpdated"])
     .index("by_created_by", ["createdBy"])
-    .index("by_assigned_to", ["assignedTo"]),
+    .index("by_assigned_to", ["assignedTo"])
+    .index("by_last_updated", ["lastUpdated"]),
 
   activities: defineTable({
     ideaId: v.id("ideas"),

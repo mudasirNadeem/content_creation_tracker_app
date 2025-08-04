@@ -43,6 +43,7 @@ export function KanbanBoard() {
   };
 
   const getIdeasByStatus = (status: Status) => {
+    // Only filter by status, let KanbanColumn handle sorting
     return ideas.filter((idea) => idea.status === status);
   };
 

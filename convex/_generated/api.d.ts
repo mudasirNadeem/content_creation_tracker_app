@@ -18,6 +18,7 @@ import type * as comments from "../comments.js";
 import type * as http from "../http.js";
 import type * as ideas from "../ideas.js";
 import type * as router from "../router.js";
+import type * as userProfiles from "../userProfiles.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   ideas: typeof ideas;
   router: typeof router;
+  userProfiles: typeof userProfiles;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,
