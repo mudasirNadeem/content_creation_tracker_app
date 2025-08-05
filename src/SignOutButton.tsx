@@ -1,8 +1,10 @@
 
 import React, { useState, useRef } from "react";
 import { ChevronDown, X } from "lucide-react";
+import { useAuthActions } from "@convex-dev/auth/react";
 
 export  function SignOutButton() {
+   const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
@@ -66,7 +68,7 @@ export  function SignOutButton() {
             View Profile
           </button>
           <button
-            onClick={() => alert("Signed out")}
+              onClick={() => void signOut()}
             className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
           >
             Sign Out

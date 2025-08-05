@@ -34,32 +34,33 @@ function Content() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <Authenticated>
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Welcome back, {loggedInUser?.name || loggedInUser?.email || "friend"}!
-          </h1>
-          <p className="text-gray-600">
-            Track your content creation ideas from concept to completion
-          </p>
-        </div>
-        <KanbanBoard />
-      </Authenticated>
-      
-      <Unauthenticated>
-        <div className="max-w-md mx-auto mt-20">
-          <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Content Creation Tracker
+    <div className="flex flex-1 min-h-[calc(100vh-6rem)] items-center justify-center">
+      <div className="w-full flex justify-center">
+        <Authenticated>
+          <div className="w-full">
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">
+              Welcome back, {loggedInUser?.name || loggedInUser?.email || "friend"}!
             </h1>
-            <p className="text-xl text-gray-600">
-              Sign in to start tracking your content ideas
+            <p className="text-gray-600">
+              Track your content creation ideas from concept to completion
             </p>
+            <KanbanBoard />
           </div>
-          <SignInForm />
-        </div>
-      </Unauthenticated>
+        </Authenticated>
+        <Unauthenticated>
+          <div className="p-8 bg-white border border-gray-200 rounded-xl shadow-lg">
+            <div className="text-center mb-6">
+              <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                Content Creation Tracker
+              </h1>
+              <p className="text-xl text-gray-600">
+                Sign in to start tracking your content ideas
+              </p>
+            </div>
+            <SignInForm />
+          </div>
+        </Unauthenticated>
+      </div>
     </div>
   );
 }
