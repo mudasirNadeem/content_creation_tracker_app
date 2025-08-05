@@ -1,10 +1,9 @@
-
 import React, { useState, useRef } from "react";
 import { ChevronDown, X } from "lucide-react";
 import { useAuthActions } from "@convex-dev/auth/react";
 
-export  function SignOutButton() {
-   const { signOut } = useAuthActions();
+export function SignOutButton() {
+  const { signOut } = useAuthActions();
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState("");
@@ -12,15 +11,37 @@ export  function SignOutButton() {
   const [image, setImage] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Get user email from the welcome message on the page
+  const getUserEmail = () => {
+    const welcomeElement = document.querySelector('h1, .welcome, [class*="welcome"]');
+    if (welcomeElement) {
+      const text = welcomeElement.textContent;
+      const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+      if (emailMatch) {
+        return emailMatch[1];
+      }
+    }
+    return 'default_user';
+  };
+
   // Load profile from localStorage on mount
   React.useEffect(() => {
-    const profile = localStorage.getItem("userProfile");
+    const currentUserEmail = getUserEmail();
+    const profile = localStorage.getItem(`userProfile_${currentUserEmail}`);
     if (profile) {
       try {
-        const { name, phone, image } = JSON.parse(profile);
-        if (name) setName(name);
-        if (phone) setPhone(phone);
-        if (image) setImage(image);
+        const { name, phone, image, email } = JSON.parse(profile);
+        // Only load profile if the stored email matches current user email
+        if (email === currentUserEmail) {
+          if (name) setName(name);
+          if (phone) setPhone(phone);
+          if (image) setImage(image);
+        } else {
+          // Clear the data if emails don't match
+          setName("");
+          setPhone("");
+          setImage(null);
+        }
       } catch {}
     }
   }, []);
@@ -34,6 +55,22 @@ export  function SignOutButton() {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleSave = () => {
+    const userEmail = getUserEmail();
+    // Save to localStorage with user-specific key AND include email in the data
+    localStorage.setItem(
+      `userProfile_${userEmail}`,
+      JSON.stringify({ 
+        name, 
+        phone, 
+        image, 
+        email: userEmail // Store the email with the profile data
+      })
+    );
+    alert(`Saved!\nName: ${name}\nPhone: ${phone}\nUser: ${userEmail}`);
+    setModalOpen(false); // Always close modal
   };
 
   return (
@@ -68,7 +105,7 @@ export  function SignOutButton() {
             View Profile
           </button>
           <button
-              onClick={() => void signOut()}
+            onClick={() => void signOut()}
             className="block w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
           >
             Sign Out
@@ -139,15 +176,7 @@ export  function SignOutButton() {
 
             <div className="mt-6 text-center">
               <button
-                onClick={() => {
-                  // Save to localStorage
-                  localStorage.setItem(
-                    "userProfile",
-                    JSON.stringify({ name, phone, image })
-                  );
-                  alert(`Saved!\nName: ${name}\nPhone: ${phone}`);
-                  setModalOpen(false);
-                }}
+                onClick={handleSave}
                 className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
               >
                 Save
