@@ -86,8 +86,7 @@ export function IdeaCard({ idea, onDragStart, onClick }: IdeaCardProps) {
               </span>
             )}
           </div>
-          <div className="text-xs text-gray-500">
-            Updated {formatRelativeTime(idea.lastUpdated)}
+          <div className="flex items-center gap-2 text-xs text-gray-500">
           </div>
         </div>
 
@@ -113,26 +112,44 @@ export function IdeaCard({ idea, onDragStart, onClick }: IdeaCardProps) {
           </div>
         )}
 
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <div className="flex items-center gap-2">
-            {idea.assignee && (
-              <div className="flex items-center gap-1">
-                <User className="w-3 h-3" />
-                <span>{idea.assignee.name || idea.assignee.email}</span>
+        <div className="flex flex-col gap-2 text-xs text-gray-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 w-full">
+              {idea.assignee && (
+                <div className="flex items-center gap-1">
+                  <User className="w-3 h-3" />
+                  <span>{idea.assignee.name || idea.assignee.email}</span>
+                </div>
+              )}
+              {idea.attachments && idea.attachments.length > 0 && (
+                
+                <div className="flex !w-[100%] items-center justify-between gap-1">
+                  <div className="flex items-center gap-1">
+                  <Paperclip className="w-3 h-3" />
+                  <span>{idea.attachments.length}</span>
+                   </div>
+                    <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                <span className="text-gray-600">{formatDate(idea._creationTime)}</span>
               </div>
-            )}
-            {idea.attachments && idea.attachments.length > 0 && (
-              <div className="flex items-center gap-1">
-                <Paperclip className="w-3 h-3" />
-                <span>{idea.attachments.length}</span>
+                </div>
+              )}
+            </div>
+            
+            {idea.dueDate && (
+     <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                <span className="text-gray-600">{formatDate(idea._creationTime)}</span>
               </div>
             )}
           </div>
           
-          {idea.dueDate && (
-            <div className="flex items-center gap-1">
-              <Calendar className="w-3 h-3" />
-              <span>{formatDate(idea.dueDate)}</span>
+          {idea.creator?.email && (
+            <div className="flex items-center justify-between gap-1 pt-1 border-t border-gray-100">
+              <div className="flex items-center gap-1">
+                <User className="w-3 h-3" />
+                <span className="text-gray-600">{idea.creator.email}</span>
+              </div>
             </div>
           )}
         </div>
