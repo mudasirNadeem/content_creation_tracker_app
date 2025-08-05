@@ -1,5 +1,5 @@
-"use client";
-import { useState, useRef } from "react";
+
+import React, { useState, useRef } from "react";
 import { ChevronDown, X } from "lucide-react";
 
 export  function SignOutButton() {
@@ -10,11 +10,27 @@ export  function SignOutButton() {
   const [image, setImage] = useState(null);
   const fileInputRef = useRef(null);
 
+  // Load profile from localStorage on mount
+  React.useEffect(() => {
+    const profile = localStorage.getItem("userProfile");
+    if (profile) {
+      try {
+        const { name, phone, image } = JSON.parse(profile);
+        if (name) setName(name);
+        if (phone) setPhone(phone);
+        if (image) setImage(image);
+      } catch {}
+    }
+  }, []);
+
   const handleImageChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      const url = URL.createObjectURL(file);
-      setImage(url);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImage(event.target.result);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -122,6 +138,11 @@ export  function SignOutButton() {
             <div className="mt-6 text-center">
               <button
                 onClick={() => {
+                  // Save to localStorage
+                  localStorage.setItem(
+                    "userProfile",
+                    JSON.stringify({ name, phone, image })
+                  );
                   alert(`Saved!\nName: ${name}\nPhone: ${phone}`);
                   setModalOpen(false);
                 }}
